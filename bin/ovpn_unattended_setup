@@ -1,0 +1,121 @@
+#!/usr/bin/env expect
+
+# Set timeout and no echo
+set timeout -1
+log_user 0
+
+# Debug start 
+puts "Starting Docker OpenVPN Setup"
+
+# Generate a long password
+puts "Generating long password..."
+variable _index [pid];
+proc password {length} {
+        global _index;
+        variable _set {shW4UMe832TpaSylIdfzxbrNki9A7Q5PmZ0XDuYVg1KEGwLcJtjRCF6OqovBHn};
+        variable _password {};
+
+        for {set _char 1} {$_char <= $length} {incr _char} {
+                incr _index [lindex [time {
+                        while {$_index >= [string length $_set]} {
+                                incr _index -[string length $_set];
+                        }
+                        
+                        # Only usefull to increase entropy
+                        
+                        for {set _count $_index} {$_count <= [string length $_set]+[string index [clock microseconds] end]} {incr _count} {
+                        
+                                # Nothing to do
+
+                        }
+                        
+                        set _password $_password[string index $_set $_index];
+                }] 0]
+        }
+
+        return $_password;
+}
+password 64
+puts "Done"
+
+# Set default values
+global OPTS
+set OPTS(hostname)      "127.0.0.1"
+set OPTS(clientname)    "Main"
+set OPTS(passwd)        $_password
+
+# Parse the input switches 
+puts "Parsing input variables..."
+proc parseargs {argc argv} {
+    global OPTS
+    foreach {key val} $argv {
+        switch -exact -- $key {
+            "-image"        { set OPTS(image)       $val }
+            "-hostname"     { set OPTS(hostname)    $val }
+            "-clientname"   { set OPTS(clientname)  $val }
+            "-passwd"       { set OPTS(passwd)      $val }
+            "-v"            { set OPTS(v)           $val }
+        }
+    }
+}
+parseargs $argc $argv
+puts "Done"
+
+# Debug out the options used
+puts "Using the following setup:"
+puts " - Hostname:     $OPTS(hostname)"
+puts " - Clientname:   $OPTS(clientname)"
+
+# Setup output folder and data
+puts "Running ovpn_genconfig..."
+spawn ovpn_genconfig -u udp://$OPTS(hostname)
+puts "Done"
+
+# Initialise the output directory with certificates
+puts "Running ovpn_initpki... (this may take a while)"
+spawn ovpn_initpki
+expect { 
+    "Confirm removal:" { 
+        send "no\r"
+        puts "Key already exists, aborting creation"
+        exp_continue
+    }
+    "Enter New CA Key Passphrase:" {
+        send "$OPTS(passwd)\r"
+        exp_continue
+    }
+    "Re-Enter New CA Key Passphrase:" {
+        send "$OPTS(passwd)\r"
+        exp_continue
+    }
+    "Common Name (eg: your user, host, or server name)" {
+        send "$OPTS(clientname)\r"
+        exp_continue
+    }
+    "Enter pass phrase for /etc/openvpn/pki/private/ca.key:" {
+        send "$OPTS(passwd)\r"
+        exp_continue
+    }
+    "Enter pass phrase for /etc/openvpn/pki/private/ca.key:" {
+        send "$OPTS(passwd)\r"
+        exp_continue
+    }
+}
+puts "Done"
+
+# Generate a client certificate without a passphrase
+puts "Building client certificate..."
+spawn easyrsa build-client-full Home nopass
+expect {
+    "Enter pass phrase for /etc/openvpn/pki/private/ca.key:" {
+        send "$OPTS(passwd)\r"
+        exp_continue
+    }
+}
+puts "Done"
+
+puts "Finished setting up Docker OpenVPN!"
+puts "Run the following command to get the your $OPTS(clientname).ovpn file: \
+      \n\n \
+      docker run -v VOLUME:/etc/openvpn --rm -it AUTHOR/IMAGE:TAG ovpn_getclient $OPTS(clientname) > $OPTS(clientname).ovpn \
+      \n"

@@ -1,0 +1,113 @@
+#!/usr/bin/env expect
+
+# Set timeout 
+set timeout -1
+log_user 0
+
+# Generate a long password
+variable _index [pid];
+proc password {length} {
+        global _index;
+        variable _set {shW4UMe832TpaSylIdfzxbrNki9A7Q5PmZ0XDuYVg1KEGwLcJtjRCF6OqovBHn};
+        variable _password {};
+
+        for {set _char 1} {$_char <= $length} {incr _char} {
+                incr _index [lindex [time {
+                        while {$_index >= [string length $_set]} {
+                                incr _index -[string length $_set];
+                        }
+                        
+                        # Only usefull to increase entropy
+                        
+                        for {set _count $_index} {$_count <= [string length $_set]+[string index [clock microseconds] end]} {incr _count} {
+                        
+                                # Nothing to do
+
+                        }
+                        
+                        set _password $_password[string index $_set $_index];
+                }] 0]
+        }
+
+        return $_password;
+}
+password 64
+
+# Set the defaults (useful for testing)
+set input_hostname 127.0.0.1
+set input_client_name Main
+set input_password $_password
+
+# Ask for server address
+puts -nonewline "What is the hostname of the server (default: 127.0.0.1): "
+flush stdout
+gets stdin input
+if {$input ne ""} { set input_hostname $input } else { puts $input_hostname }
+
+# Ask for a client name
+puts -nonewline "What would you like to name the client (default: Main): "
+flush stdout
+gets stdin input
+if {$input ne ""} { set input_client_name $input } else { puts $input_client_name }
+
+# Ask for a password for keys
+stty -echo; 
+puts -nonewline "What password would you like to use (defaults to random 64 byte): "
+flush stdout
+gets stdin input
+if {$input ne ""} then { set input_password $input }
+puts ""
+stty echo
+
+# Debug start 
+puts "\nStarting Docker OpenVPN Setup"
+
+# Setup output folder and data
+puts "Running ovpn_genconfig..."
+spawn ovpn_genconfig -u udp://$input_hostname
+puts "Done"
+
+# Initialise the output directory with certificates
+puts "Running ovpn_initpki... (this may take a while)"
+spawn ovpn_initpki
+expect { 
+    "Confirm removal:" { 
+        send "yes\r"
+        exp_continue
+    }
+    "Enter New CA Key Passphrase:" {
+        send "$input_password\r"
+        exp_continue
+    }
+    "Re-Enter New CA Key Passphrase:" {
+        send "$input_password\r"
+        exp_continue
+    }
+    "Common Name (eg: your user, host, or server name)" {
+        send "$input_client_name\r"
+        exp_continue
+    }
+    "Enter pass phrase for /etc/openvpn/pki/private/ca.key:" {
+        send "$input_password\r"
+        exp_continue
+    }
+    "Enter pass phrase for /etc/openvpn/pki/private/ca.key:" {
+        send "$input_password\r"
+        exp_continue
+    }
+}
+puts "Done"
+
+# Generate a client certificate without a passphrase
+puts "Building client certificate..."
+spawn easyrsa build-client-full Home nopass
+expect {
+    "Enter pass phrase for /etc/openvpn/pki/private/ca.key:" {
+        send "$input_password\r"
+        exp_continue
+    }
+}
+puts "Done"  
+
+# Finish debug
+puts "\n Finished setting up Docker OpenVPN!"

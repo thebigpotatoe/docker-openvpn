@@ -1,0 +1,65 @@
+Build 
+
+docker build -t thebigpotatoe/docker-openvpn:aarch64 .
+docker push thebigpotatoe/docker-openvpn:aarch64
+
+
+Details
+
+hostname: thebigpotatoe.asuscomm.com
+password: 9RGeuzMBPTTVHsCHzUWdh3RzmNKETftgmVLfpyxDZn5GCCGz9yr9C7bDnrZpgz6G
+
+
+
+Manual Method
+
+docker volume create --name openvpn_data
+
+docker run -v openvpn_data:/etc/openvpn --rm -it thebigpotatoe/docker-openvpn:aarch64 ovpn_genconfig -u udp://thebigpotatoe.asuscomm.com
+docker run -v openvpn_data:/etc/openvpn --rm -it thebigpotatoe/docker-openvpn:aarch64 ovpn_initpki
+docker run -v openvpn_data:/etc/openvpn --rm -it thebigpotatoe/docker-openvpn:aarch64 ovpn_getclient Home > Home.ovpn
+
+docker run -v openvpn_data:/etc/openvpn --rm -it -p 1194:1194/udp --cap-add=NET_ADMIN thebigpotatoe/docker-openvpn:aarch64
+
+
+
+Setup Method
+
+/usr/bin/expect bin/setup
+
+/usr/bin/expect bin/ovpn_unattended_setup \
+    -image thebigpotatoe/docker-openvpn:aarch64 \
+    -hostname thebigpotatoe.asuscomm.com \
+    -clientname Home \
+    -v openvpn_openvpn_data
+
+docker run -v openvpn_data:/etc/openvpn --rm -it -p 1194:1194/udp --cap-add=NET_ADMIN thebigpotatoe/docker-openvpn:aarch64
+
+
+
+Unattended Method
+
+docker run \
+  --rm -it  \
+  -v openvpn_data:/etc/openvpn \
+  thebigpotatoe/docker-openvpn:aarch64 \
+  ovpn_unattended_setup -hostname thebigpotatoe.asuscomm.com -clientname Home
+
+docker run \
+  --rm -it  \
+  -v openvpn_data:/etc/openvpn \
+  thebigpotatoe/docker-openvpn:aarch64 \
+  ovpn_getclient Home > Home.ovpn
+
+docker run \
+  --rm -it \
+  -v openvpn_openvpn_data:/etc/openvpn \
+  -p 1194:1194/udp \
+  --cap-add=NET_ADMIN \
+  thebigpotatoe/docker-openvpn:aarch64
+
+docker run \
+  --rm -it  \
+  -v openvpn_openvpn_data:/etc/openvpn \
+  thebigpotatoe/docker-openvpn:aarch64 \
+  ovpn_getclient Home > Home.ovpn
